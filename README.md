@@ -8,7 +8,7 @@ Choose language / Выберите язык:
 
 # 🇺🇸 English
 
-# eMMU — Hardware Memory Management Unit for Intel 8080 (KP580VM80A)
+# eMMU — Hardware Memory Management Unit for Intel 8080 (KR580VM80A)
 
 ## 📌 Project Overview
 **eMMU (extended Memory Management Unit)** is a high-performance hardware memory management subsystem implemented entirely on discrete TTL logic (74LS, 74ALS series). The project is architected around the vintage **Intel 8080 (KR580VM80A)** 8-bit microprocessor kit and radically overcomes its native architectural limitations.
