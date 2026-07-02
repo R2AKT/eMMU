@@ -5351,7 +5351,7 @@ ioctl_err_inval:
     RET
 
 ; =============================================================================
-; СИСКОЛЛ POSIX ОС ЯДРА (Ring 0): СИСТЕМНЫЙ ВЫЗОВ shutdown() [МОНОЛИТ ДЛЯ ZASM]
+; СИСКОЛЛ POSIX ОС ЯДРА (Ring 0): СИСТЕМНЫЙ ВЫЗОВ shutdown()
 ; =============================================================================
 sys_shutdown:
     ; --- ШАГ 1: Валидация дескриптора файла и режима how ---
@@ -6467,6 +6467,541 @@ netstat_err_fault:
     RET
 
 ; =============================================================================
+; СИСКОЛЛ POSIX ОС ЯДРА (Ring 0): СИСТЕМНЫЙ ВЫЗОВ openpty()
+; =============================================================================
+sys_openpty:
+    MOV  A, H
+    ORA  L
+    JZ   pty_err_fault          ; Защита: если адрес указателя нулевой — ошибка
+
+    PUSH H                      ; Стак: Сохранили пользовательский указатель массива sv
+    
+    ; --- ШАГ 1: Поиск двух свободных локальных FD в PCB текущего процесса ---
+    CALL get_current_pcb_address ; HL = Базовый адрес PCB задачи
+    PUSH H                      ; Стак: [Адрес_PCB, Указатель_sv]
+
+    LXI  D, O_FILE_TABLE        ; Смещение таблицы файлов (+20)
+    DAD  D                      ; HL -> Начало O_FILE_TABLE
+    
+    MVI  B, 8                   ; В таблице процесса ровно 8 слотов (FD 0..7)
+    MVI  C, 0FFh                ; C = Будущий локальный FD Master
+    MVI  D, 0FFh                ; D = Будущий локальный FD Slave
+
+pty_find_local_fd_loop:
+    MOV  A, M
+    CPI  RES_FREE_MARKER        ; Слот свободен (0xFF)?
+    JNZ  pty_local_fd_next
+    
+    MOV  A, C
+    CPI  00h                    ; Проверяем, зафиксирован ли уже первый FD?
+    JNC  pty_save_second_fd
+    
+    ; Вычисляем локальный номер первого найденного FD (0..7)
+    MOV  A, B
+	MVI A, 8
+	SUB B
+    MOV  C, A                   ; C = Найден локальный FD для Master
+    JMP  pty_local_fd_next
+
+pty_save_second_fd:
+    MOV  A, B
+	MVI A, 8
+	SUB B
+    MOV  D, A                   ; D = Найден локальный FD для Slave
+    JMP  pty_local_fds_ok       ; Оба дескриптора успешно локализованы!
+
+pty_local_fd_next:
+    INX  H                      ; Сдвигаемся к следующему слоту дескрипторов
+    DCR  B
+    JNZ  pty_find_local_fd_loop
+
+    ; Ошибка: у процесса нет двух свободных файловых дескрипторов (EMFILE)
+    POP  H
+	POP  H             			; Очистили стек ядра
+    MVI  A, 0FFh                ; Возвращаем ошибку EMFILE (0xFF)
+    RET
+
+; -----------------------------------------------------------------------------
+; СВОБОДНЫЕ ЛОКАЛЬНЫЕ FD НАЙДЕНЫ (C = FD Master, D = FD Slave)
+; -----------------------------------------------------------------------------
+pty_local_fds_ok:
+    MOV  A, C
+	STA PTY_TEMP_FD1
+    MOV  A, D
+	STA PTY_TEMP_FD2
+
+    ; --- ШАГ 2: Поиск свободного аппаратного слота в глобальной PTY_SYS_TABLE ---
+    LXI  H, PTY_SYS_TABLE
+    MVI  B, MAX_PTY_PAIRS       ; Сканируем доступные 4 пары
+    MVI  C, 0                   ; C = Итератор системных пар (0..3)
+
+pty_find_sys_loop:
+    MOV  A, M                   ; Читаем поле P_PTY_STATUS (+0)
+    CPI  00h                    ; Слот свободен (00h)?
+    JZ   pty_sys_slot_ok        ; Нашли свободную аппаратную пару!
+
+    LXI  D, PTY_STRUCT_SIZE
+    DAD  D                      ; Сдвиг на следующую структуру PTY в ОЗУ ядра
+    INR  C                      ; Увеличиваем индекс пары
+    DCR  B
+    JNZ  pty_find_sys_loop
+
+    ; Ошибка: Системная таблица PTY переполнена (ENFILE)
+    POP  H
+	POP  H             ; Очистили стек ядра
+    MVI  A, 0FEh                ; Возвращаем ошибку ENFILE (0xFE)
+    RET
+
+; -----------------------------------------------------------------------------
+; СИСТЕМНЫЙ СЛОТ ВЫДЕЛЕН (HL = Адрес структуры PTY, C = Индекс пары 0..3)
+; -----------------------------------------------------------------------------
+pty_sys_slot_ok:
+    PUSH H                      ; Стак: [Указатель_на_структуру_PTY, Адрес_PCB, Указатель_sv]
+
+    ; Вычисляем глобальные системные индексы VFS для Master и Slave
+    MOV  A, C
+    ADI  GLOBAL_PTY_MASTER      ; A = 48 + Индекс_Пары (48..51)
+    STA  PTY_TEMP_G_IDX1
+    
+    MOV  A, C
+    ADI  GLOBAL_PTY_SLAVE       ; A = 52 + Индекс_Пары (52..55)
+    STA  PTY_TEMP_G_IDX2
+
+    ; --- ШАГ 3: Выделение одной физической страницы eMMУ через RAM_BITMAP ---
+    CALL k_allocate_free_physical_page ; Запросили 16 КБ чистой ОЗУ-памяти устройства
+    CPI  0FFh
+    JZ   pty_err_nomem          ; Если физическая память исчерпана — аварийный выход
+
+    STA  PTY_TEMP_PAGE          ; Зафиксировали выделенный номер страницы
+
+    ; --- ШАГ 4: Инициализация полей структуры PTY в PTY_SYS_TABLE ---
+    POP  H                      ; Восстановили HL = Адрес структуры PTY из стека
+    PUSH H                      ; Снова сохранили для баланса
+    
+    MVI  M, 01h                 ; P_PTY_STATUS = 01h (Активен / Открыт)
+    INX  H                      ; HL -> P_PTY_PAGE (+1)
+    LDA  PTY_TEMP_PAGE
+    MOV  M, A                   ; Прописали номер физической страницы eMMU
+    
+    INX  H                      ; HL -> P_PTY_MASTER_PID (+2)
+    LDA  CURRENT_PID
+    MOV  M, A                   ; Master управляется текущим процессом
+    
+    INX  H                      ; HL -> P_PTY_SLAVE_PID (+3)
+    MOV  M, A                   ; На этапе openpty Slave принадлежит тому же PID (обычно до fork)
+    
+    INX  H                      ; HL -> P_PTY_FLAGS (+4)
+    MVI  M, PTY_ECHO_BIT        ; По умолчанию дисциплина линии включает дублирование ввода (ECHO)
+
+    ; Очищаем кольцевые указатели хвостов буферов PTY пары в ОЗУ ядра
+    MOV  A, C
+    ADD  A                      ; Индекс_Пары * 2
+    MOV  E, A
+    MVI  D, 0
+    
+    LXI  H, PTY_M2S_TAILS
+	DAD D
+    MVI  M, 00h
+	INX H
+	MVI M, 00h ; Сбросили 16-битный Tail Master->Slave
+    
+    LXI  H, PTY_S2M_TAILS
+	DAD D
+    MVI  M, 00h
+	INX H
+	MVI M, 00h ; Сбросили 16-битного Tail Slave->Master
+
+    ; --- ШАГ 5: Прошивка глобальных индексов VFS в файловую таблицу процесса ---
+    POP  H                      ; Сняли со стека указатель на структуру PTY (больше не нужен)
+    POP  H                      ; HL = Восстановили базовый адрес PCB текущего процесса из стека
+    PUSH H                      ; Вернули для финального баланса
+    
+    LXI  D, O_FILE_TABLE        ; Переходим к дескрипторам процесса
+    DAD  D
+    PUSH H                      ; Сохранили старт таблицы файлов задачи в стек
+    
+    ; Связываем FD Master
+    LDA  PTY_TEMP_FD1           ; Выделенный локальный дескриптор Master
+    MOV  E, A
+	MVI D, 0
+	DAD D
+    LDA  PTY_TEMP_G_IDX1        ; Глобальный индекс VFS (48..51)
+    MOV  M, A
+    
+    POP  H                      ; Восстановили старт таблицы файлов задачи
+    ; Связываем FD Slave
+    LDA  PTY_TEMP_FD2           ; Выделенный локальный дескриптор Slave
+    MOV  E, A
+	MVI D, 0
+	DAD D
+    LDA  PTY_TEMP_G_IDX2        ; Глобальный индекс VFS (52..55)
+    MOV  M, A                   ; СВЯЗЬ ПРОПИСАНА! Дескрипторы PTY пары открыты для Ring 3.
+
+    ; --- ШАГ 6: ЗАПИСЬ НОМЕРОВ ДЕСКРИПТОРОВ В USER SPACE ПРОЦЕССА ---
+    POP  H                      ; Полностью очистили стек ядра от адреса PCB
+    POP  H                      ; HL = Восстановили оригинальный адрес массива sv в Ring 3
+    
+    OUT  076H                   ; Включаем режим KERNEL_OVERRIDE_EN = 0 для прорыва Firewall
+    LDA  PTY_TEMP_FD1           ; Взяли локальный FD Master
+    MOV  M, A                   ; Записали первый байт в массив пользователя!
+    INX  H
+    LDA  PTY_TEMP_FD2           ; Взяли локальный FD Slave
+    MOV  M, A                   ; Записали второй байт в массив пользователя!
+    OUT  076H                   ; Мгновенно отключаем оверрайд шины, возвращая Ring 0
+
+    CALL mark_user_page_dirty_by_addr ; Сигнализируем eMMU о модификации страницы задачи
+    
+    MVI  A, 00h                 ; Код возврата = 00H (Чистый успех POSIX)
+    RET                         ; Выход в syscall_return.
+
+; --- ОБРАБОТЧИКИ КРИТИЧЕСКИХ ОШИБОК АЛЛОКАЦИИ ---
+pty_err_nomem:
+    POP  H
+	POP  H
+	POP  H    					; Очистили стек от всех сохраненных контекстов
+    MVI  A, 0FEh                ; Возвращаем ошибку ENFILE / ENOMEM (0xFE)
+    RET
+
+pty_err_fault:
+    MVI  A, 0FFh                ; Возвращаем ошибку EFAULT (0xFF — Неверный адрес)
+    RET
+
+; =============================================================================
+; ВНУТРЕННЯЯ ФУНКЦИЯ ЯДРА: k_pty_write (ТРАНСЛЯЦИЯ В ОЗУ eMMU)
+; =============================================================================
+k_pty_write:
+    SHLD PTY_IO_BUF_PTR
+    MOV  A, B
+	STA PTY_IO_BYTES_REQ+1
+    MOV  A, C
+	STA PTY_IO_BYTES_REQ
+    XRA  A
+	STA PTY_IO_BYTES_CURR
+	STA PTY_IO_BYTES_CURR+1
+
+    ; Определяем индекс пары и направление
+    MOV  A, D                       ; D содержит глобальный индекс VFS (48..55)
+    CPI  GLOBAL_PTY_SLAVE           ; Индекс >= 52?
+    JC   pty_write_master_side      ; Если < 52 — пишет Master сторона
+
+; --- Пишет сторона Slave (Данные идут в S2M буфер, смещение 8КБ) ---
+    SUI  GLOBAL_PTY_SLAVE           ; A = Номер пары (0..3)
+    STA  PTY_IO_PAIR_IDX
+    MVI  A, 01h                     ; Направление = S2M (1)
+    STA  PTY_IO_DIRECTION
+    JMP  pty_write_init_struct
+
+pty_write_master_side:
+    SUI  GLOBAL_PTY_MASTER          ; A = Номер пары (0..3)
+    STA  PTY_IO_PAIR_IDX
+    XRA  A                          ; Направление = M2S (0)
+    STA  PTY_IO_DIRECTION
+
+pty_write_init_struct:
+    ; Считаем адрес структуры PTY в PTY_SYS_TABLE
+    LDA  PTY_IO_PAIR_IDX
+    MOV  L, A
+	MVI H, 0
+    DAD  H
+	DAD  H
+	DAD  H        ; HL = Пару * 8
+    LXI  D, PTY_SYS_TABLE
+	DAD D
+    SHLD PTY_IO_STRUCT_PTR          ; Зафиксировали адрес описателя PTY
+
+pty_write_loop:
+    ; Проверяем, все ли байты перенесены
+    LHLD PTY_IO_BYTES_REQ
+    MOV  A, H
+	ORA L
+	JZ pty_write_success
+
+    ; Расчет адреса записи в окне 2 eMMU (0x8000)
+    LXI  D, 08000h                  ; DE = База окна 2
+    LDA  PTY_IO_DIRECTION
+    ORA  A
+    JZ   pty_write_addr_base_ok     ; Если M2S (0) — смещение 0
+    LXI  H, 8192
+	DAD D
+	XCHG     ; Если S2M (1) — смещение 8КБ, DE = 0xA000
+
+pty_write_addr_base_ok:
+    ; Извлекаем и инкрементируем 16-битный указатель Tail
+    LDA  PTY_IO_PAIR_IDX
+	ADD A
+	MOV L, A
+	MVI H, 0
+    LDA  PTY_IO_DIRECTION
+	ORA A
+    JZ   pty_write_get_m2s_tail
+    LXI  B, PTY_S2M_TAILS
+	DAD B
+	JMP pty_write_tail_cell_ok
+pty_write_get_m2s_tail:
+    LXI  B, PTY_M2S_TAILS
+	DAD B
+pty_write_tail_cell_ok:
+    SHLD PTY_IO_TAIL_PTR            ; Сохранили адрес ячейки указателя Tail
+    MOV  A, M
+	INX H
+	MOV H, M
+	MOV L, A ; HL = Текущий Tail (0..8191)
+    
+    DAD  D                          ; HL = База_Окна + Tail (Точный адрес записи!)
+    PUSH H                          ; Спасся адрес записи в eMMU
+
+    ; Вычитываем байт из Ring 3
+    LHLD PTY_IO_BUF_PTR
+    OUT  076H                       ; KERNEL_OVERRIDE_EN = 0
+    MOV  A, M                       ; Прочитали байт данных процесса
+    OUT  076H                       ; KERNEL_OVERRIDE_EN = 1
+    STA  WRITE_CHAR_CHAR
+    INX  H
+	SHLD PTY_IO_BUF_PTR    ; Сдвинули буфер пользователя
+
+    ; Коммутируем eMMU-страницу PTY и пишем байт
+    LHLD PTY_IO_STRUCT_PTR
+	INX H  ; HL -> P_PTY_PAGE (+1)
+    MOV  A, M                       ; A = Номер физической страницы PTY
+    OUT  072H                       ; Прошили Окно 2 фреймом PTY
+    OUT  076H                       ; Включили оверрайд шины
+    
+    POP  H                          ; HL = Физический адрес записи
+    LDA  WRITE_CHAR_CHAR
+    MOV  M, A                       ; ЗАПИСАЛИ БАЙТ В БУФЕР PTY ТРАНСЛЯЦИИ!
+
+    ; Возвращаем страницу ядра в Окно 2
+    LXI  H, PCB_TABLE + O_PAGES_MAP + 2
+    MOV  A, M
+	OUT  072H
+	OUT  076H ; Окно 2 восстановлено, оверрайд снят
+
+    ; Инкремент и маскировка Tail под 8 Килобайт (0x1FFF)
+    LHLD PTY_IO_TAIL_PTR
+    MOV  E, M
+	INX H
+	MOV  D, M   ; DE = Старый Tail
+    INX  D                          ; Tail++
+    MOV  A, D
+	ANI 01Fh
+	MOV D, A ; Маска 8КБ
+    MOV  M, D
+	DCX H
+	MOV M, E    ; Сохранили новый Tail
+
+    ; Асинхронное пробуждение читающей стороны
+    LHLD PTY_IO_STRUCT_PTR
+    LDA  PTY_IO_DIRECTION
+	ORA A
+    JZ   pty_write_wake_slave
+    INX  H
+	INX  H                 ; HL -> P_PTY_MASTER_PID (+2)
+    MOV  A, M
+	JMP pty_write_wake_proc
+pty_write_wake_slave:
+    LXI  D, 3
+	DAD  D              ; HL -> P_PTY_SLAVE_PID (+3)
+    MOV  A, M
+
+pty_write_wake_proc:
+    ; A = PID процесса, который нужно разбудить
+    MOV  L, A
+	MVI H, 0
+	DAD H
+	DAD H
+	DAD H
+	DAD H
+	DAD H
+	DAD H ; *64
+    LXI  D, PCB_TABLE
+	DAD D
+	PUSH H
+    LXI  D, O_STATUS
+	DAD D
+	MOV A, M
+	CPI ST_WAITING
+	JNZ pty_write_inc_counters
+    POP  H
+	PUSH H
+    LXI  D, O_WAIT_CODE
+	DAD D
+	MOV A, M
+    ; Ждал ли процесс ввода с PTY?
+    CPI  W_PTY_MASTER
+	JZ pty_write_do_wake
+    CPI  W_PTY_SLAVE
+	JNZ pty_write_inc_counters
+pty_write_do_wake:
+    MVI  M, 00h                     ; Сбросили код сна
+    POP  H
+	LXI  D, O_STATUS
+	DAD D
+	MVI M, ST_READY ; РАЗБУЖЕН!
+    JMP  pty_write_counters_entry
+
+pty_write_inc_counters:
+    POP  H                          ; Сбалансировали стек
+
+pty_write_counters_entry:
+    LHLD PTY_IO_BYTES_CURR
+	INX H
+	SHLD PTY_IO_BYTES_CURR
+    LHLD PTY_IO_BYTES_REQ
+	DCX H
+	SHLD PTY_IO_BYTES_REQ
+    JMP  pty_write_loop
+
+pty_write_success:
+    LDA  PTY_IO_BYTES_CURR          ; Возвращаем число записанных байт
+    RET
+
+; =============================================================================
+; СИСКОЛЛ POSIX ОС ЯДРА (Ring 0): СИСТЕМНЫЙ ВЫЗОВ ptsname()
+; =============================================================================
+sys_ptsname:
+    ; Валидация адреса буфера назначения пользователя
+    MOV  A, H
+    ORA  L
+    JZ   ptsname_err_fault      ; Если HL == 0000H — аварийный выход, EFAULT
+
+    SHLD PTSNAME_USER_PTR       ; Зафиксировали адрес буфера Ring 3 в ядре
+
+    ; --- ШАГ 1: Валидация дескриптора и извлечение глобального индекса ---
+    MOV  A, D
+    CPI  8                      ; Проверяем границы локальных дескрипторов (0..7)
+    JNC  ptsname_err_badf       ; Передан неверный локальный fd
+
+    MOV  C, D
+	MVI B, 0
+    CALL get_current_pcb_address ; HL = Базовый адрес PCB задачи
+    LXI  D, O_FILE_TABLE
+    DAD  D
+	DAD  B
+    MOV  A, M                   ; A = Глобальный файловый индекс VFS (32..63)
+    
+    ; Проверяем, принадлежит ли индекс диапазону PTY Master (48..51)
+    CPI  GLOBAL_PTY_MASTER      ; Индекс < 48?
+    JC   ptsname_err_badf       ; Если меньше — это не PTY Master!
+    CPI  GLOBAL_PTY_SLAVE       ; Индекс >= 52?
+    JNC  ptsname_err_badf       ; Если больше или равен — это Slave или другой объект!
+
+    ; --- ШАГ 2: Вычисление номера подчиненной линии Slave ---
+    SUI  GLOBAL_PTY_MASTER      ; A = Индекс - 48 (Результат: 0, 1, 2 или 3)
+    STA  PTSNAME_LINE_NUM       ; Зафиксировали чистый номер линии
+
+    ; --- ШАГ 3: Динамическая сборка строки пути в шаблоне ядра ---
+    ADI  030h                   ; Преобразуем число 0..3 в ASCII символ '0'..'3'
+    LXI  H, PTSNAME_TEMPLATE + 11 ; HL указывает точно на символ '#' в шаблоне
+    MOV  M, A                   ; Модифицировали шаблон: теперь там легитимный путь!
+
+    ; --- ШАГ 4: ПОБАЙТОВЫЙ ЭКСПОРТ СТРОКИ В RING 3 (KERNEL_OVERRIDE) ---
+    LXI  D, PTSNAME_TEMPLATE    ; DE = Адрес сформированной строки-источника в Ring 0
+    LHLD PTSNAME_USER_PTR       ; HL = Буфер назначения в Ring 3 процесса
+    MVI  B, PTSNAME_STR_LEN     ; Нам необходимо скопировать ровно 13 байт
+
+ptsname_copy_loop:
+    LDAX D                      ; Читаем байт из шаблона ядра Ring 0
+    MOV  C, A                   ; Временно припрятали символ в регистр C
+
+    OUT  076H                   ; Включаем режим KERNEL_OVERRIDE_EN = 0 для прорыва Firewall
+    MOV  M, C                   ; Записали байт пути в логическую память Ring 3 процесса!
+    OUT  076H                   ; Мгновенно отключаем оверрайд шины, возвращая Ring 0
+    
+    INX  D                      ; Сдвигаем указатель источника
+    INX  H                      ; Сдвигаемся в буфере Ring 3
+    DCR  B                      ; Уменьшаем счетчик байт
+    JNZ  ptsname_copy_loop      ; Повторяем до полной пересылки строки с NULL-терминатором
+
+    ; Сигнализируем eMMU о модификации страницы юзерспейса
+    CALL mark_user_page_dirty_by_addr
+
+    ; Восстанавливаем символ '#' в шаблоне ядра для обеспечения реентерабельности
+    LXI  H, PTSNAME_TEMPLATE + 11
+    MVI  M, 023h                ; ASCII-код символа '#' (0x23)
+
+    MVI  A, 00h                 ; Код возврата сисколла = 00H (Чистый успех POSIX)
+    RET                         ; Выход в syscall_return.
+
+; --- БЛОКИ ОБРАБОТКИ АВАРИЙНЫХ СИТУАЦИЙ (ОШИБКИ ИНТЕРФЕЙСА) ---
+ptsname_err_badf:
+    MVI  A, 0FFh                ; Код ошибки 0xFF (POSIX EBADF — Неверный файловый дескриптор)
+    RET
+
+ptsname_err_fault:
+    MVI  A, 0FEh                ; Код ошибки 0xFE (POSIX EFAULT — Ошибка обращения по адресу)
+    RET
+
+; =============================================================================
+; СИСКОЛЛ POSIX ОС ЯДРА (Ring 0): СИСТЕМНЫЙ ВЫЗОВ ttyname()
+; =============================================================================
+sys_ttyname:
+    ; --- ШАГ 1: Валидация адреса пользовательского буфера назначения ---
+    MOV  A, H
+    ORA  L
+    JZ   ttyname_err_fault      ; Если HL == 0000H — аварийный выход, EFAULT
+
+    SHLD TTYNAME_USER_PTR       ; Зафиксировали адрес буфера Ring 3 в ОЗУ ядра
+
+    ; --- ШАГ 2: Валидация дескриптора и извлечение глобального индекса ---
+    MOV  A, D
+    CPI  8                      ; Проверяем границы локальных дескрипторов задачи (0..7)
+    JNC  ttyname_err_badf       ; Передан невалидный локальный fd, выходим с EBADF
+
+    MOV  C, D
+	MVI B, 0
+    CALL get_current_pcb_address ; HL = Базовый адрес PCB текущей задачи
+    LXI  D, O_FILE_TABLE
+    DAD  D
+	DAD  B
+    MOV  A, M                   ; A = Глобальный файловый индекс VFS (0..63)
+    
+    CPI  RES_FREE_MARKER        ; Слот свободен в таблице процесса (0xFF)?
+    JZ   ttyname_err_badf       ; Если пуст — возвращаем EBADF
+
+    ; --- ШАГ 3: Проверка на соответствие физическому терминалу (ENOTTY) ---
+    ; В системной архитектуре MEGA-580 OS индекс 16 жестко закреплен за TTYfs
+    CPI  16                     ; Сравниваем глобальный индекс с константой физического TTY
+    JNZ  ttyname_err_notty      ; Если индекс другой — это диск/сокет, возвращаем ENOTTY
+
+    ; --- ШАГ 4: ПОБАЙТОВЫЙ ЭКСПОРТ СТРОКИ ПУТИ В RING 3 (KERNEL_OVERRIDE) ---
+    LXI  D, TTYNAME_PATH_STR    ; DE = Адрес строки-источника "/dev/tty" в Ring 0 ядра
+    LHLD TTYNAME_USER_PTR       ; HL = Буфер назначения в логической памяти Ring 3
+    MVI  B, TTYNAME_STR_LEN     ; Нам необходимо переслать ровно 9 байт
+
+ttyname_copy_loop:
+    LDAX D                      ; Вычитали байт пути из памяти ядра Ring 0
+    MOV  C, A                   ; Временно перенесли символ в регистр C
+
+    OUT  076H                   ; Активируем режим KERNEL_OVERRIDE_EN = 0 для прорыва Firewall
+    MOV  M, C                   ; Записали байт пути в логическую память Ring 3 процесса!
+    OUT  076H                   ; Мгновенно отключаем оверрайд шины, возвращая Ring 0
+    
+    INX  D                      ; Сдвигаем указатель источника
+    INX  H                      ; Сдвигаем указатель назначения в юзерспейсе
+    DCR  B                      ; Уменьшаем счетчик оставшихся байт
+    JNZ  ttyname_copy_loop      ; Повторяем цикл до переноса всей строки с NULL-байтом
+
+    ; Уведомляем подсистему eMMU о модификации страницы пользовательского пространства
+    CALL mark_user_page_dirty_by_addr
+
+    ; --- ШАГ 5: УСПЕШНЫЙ ВЫХОД ИЗ СИСКОЛЛА ---
+    MVI  A, 00h                 ; Код возврата сисколла = 00H (Чистый успех POSIX)
+    RET                         ; Выход в syscall_return.
+
+; --- БЛОКИ ОБРАБОТКИ АВАРИЙНЫХ СИТУАЦИЙ (ОШИБКИ ИНТЕРФЕЙСА) ---
+ttyname_err_badf:
+    MVI  A, 0FFh                ; Код ошибки 0xFF (POSIX EBADF — Неверный файловый дескриптор)
+    RET
+
+ttyname_err_notty:
+    MVI  A, 0FEh                ; Код ошибки 0xFE (POSIX ENOTTY — Файл не является терминалом)
+    RET
+
+ttyname_err_fault:
+    MVI  A, 0FDh                ; Код ошибки 0xFD (POSIX EFAULT — Неверный адрес буфера)
+    RET
+
+; =============================================================================
 ; АППАРАТНЫЙ ОБРАБОТЧИК IR2 ВН59 (АДРЕС 0x0050): ДЕМУЛЬТИПЛЕКСОР ПДП (TC РЕГИСТР)
 ; =============================================================================
 hw_dma_tc_entry:
@@ -7181,9 +7716,6 @@ mark_user_page_dirty_by_addr:
     RET
 
 ; =============================================================================
-; АППАРАТНЫЙ ОБРАБОТЧИК ПРЕРЫВАНИЙ USART КР580ВВ51А (Адрес 0x0048, Вектор IR1)
-; =============================================================================
-; =============================================================================
 ; АППАРАТНЫЙ ОБРАБОТЧИК ПРЕРЫВАНИЯ: ИНТЕРФЕЙС КР580ВВ51А (VT100 TTY)
 ; =============================================================================
 ; Вход:  Прерывание от UART. Регистры Ring 3/0 заморожены в стеке текущей задачи.
@@ -7703,7 +8235,11 @@ DEF_SYS_SEND			EQU 22			; Посылка сетевого пакета (send)
 DEF_SYS_RECV			EQU 23			; Приём сетевого пакета (receive)
 DEF_SYS_SOCKETPAIR		EQU 24			; Создание пары двунаправленных локальных сокетов внутреннего домена (AF_UNIX) (socketpait)
 DEF_SYS_NETSTAT			EQU 25			; Вывод информации о сетевых интерфейсах и сокетах (netstat)
-
+DEF_SYS_SOCKETFS_INIT	EQU 26			; Монтирование псевдофайловой системы (socketfs)
+DEF_SYS_SHUTDOWN		EQU	27			; Завершение сетевого стека и IPC-синхронизации (shutdown)
+DEF_SYS_OPENPTY 		EQU	28			; Pseudo-TTY / PTY (openpty)
+DEF_SYS_PTSNAME			EQU	29			; Определение имени файла Slave-устройства (pstname)
+DEF_SYS_TTYNAME			EQU	30			; Определение имени физического терминала (ttyname)
 
 ; =============================================================================
 ; СЛУЖЕБНЫЕ ПЕРЕМЕННЫЕ ЯДРА ДЛЯ СИСТЕМНОГО ВЫЗОВА SYS_FORK (ОЗУ RING 0)
@@ -8024,9 +8560,13 @@ SYSCALL_TABLE:
 	DW	sys_recv				; Index 23: SYS_RECV
 	DW	sys_socketpair			; Index 24: SYS_SOCKETPAIR
 	DW	sys_netstat				; Index 25: SYS_NETSTAT
+	DW	sys_socketfs_init		; Index 26: SYS_SOCKETFS_INIT
+	DW	sys_shutdown			; Index 27: SYS_SHUTDOWN
+	DW	sys_openpty				; Index 28: SYS_OPENPTY
+	DW	sys_ptsname				; Index 29: SYS_PTSNAME
+	DW	sys_ttyname				; Index 30: SYS_TTYNAME
 
-
-MAX_SYSCALL_NUM			EQU 26			; Размер таблицы переходов системных вызовов
+MAX_SYSCALL_NUM			EQU 31			; Размер таблицы переходов системных вызовов
 ENOSYS           		EQU 0xE5		; Возвращает ошибку (0xE5)
 
 ; =============================================================================
@@ -8485,3 +9025,73 @@ NET_UNIX_HEADS:         ds 8
 	; --- ДОБАВЛЕННЫЕ СЛУЖЕБНЫЕ ПЕРЕМЕННЫЕ В ОЗУ ЯДРА RING 0 ---
 NET_IO_HEAD_CELL_PTR:   ds 2
 NET_IO_PHYS_READ_ADDR:  ds 2
+
+; =============================================================================
+; КОНСТАНТЫ И СМЕЩЕНИЯ ДЛЯ ПОДСИСТЕМЫ ПСЕВДОТЕРМИНАЛОВ (PTY)
+; =============================================================================
+PTY_STRUCT_SIZE    EQU 8            ; Фиксированный размер описателя PTY в ядре
+MAX_PTY_PAIRS      EQU 4            ; Максимальное количество PTY сессий (4 пары)
+
+; Диапазоны глобальных системных индексов VFS для PTY
+GLOBAL_PTY_MASTER  EQU 48           ; Стартовый индекс для PTY Master (48..51)
+GLOBAL_PTY_SLAVE   EQU 52           ; Стартовый индекс для PTY Slave (52..55)
+
+; Смещения полей в структуре PTY_SYS_TABLE
+P_PTY_STATUS       EQU 0            ; Статус: 00h=FREE, 01h=OPENED
+P_PTY_PAGE         EQU 1            ; Физическая страница eMMU для буферов [1 байт]
+P_PTY_MASTER_PID   EQU 2            ; PID процесса на стороне Master [1 байт]
+P_PTY_SLAVE_PID    EQU 3            ; PID процесса на стороне Slave [1 байт]
+P_PTY_FLAGS        EQU 4            ; Флаги дисциплины линии (ECHO, ICANON) [1 байт]
+P_PTY_RESERVED     EQU 5            ; Резерв для выравнивания [3 байта]
+
+; Коды асинхронного сна планировщика для PTY
+W_PTY_MASTER       EQU 0Fh          ; Сон: Master ждет вывода от Slave
+W_PTY_SLAVE        EQU 10h          ; Сон: Slave ждет ввода от Master
+
+PTY_ECHO_BIT       EQU 01h          ; Бит флага: дублировать ввод обратно (Эхо)
+
+; --- ГЛОБАЛЬНАЯ ТАБЛИЦА ПСЕВДОТЕРМИНАЛОВ (RING 0 ОЗУ) ---
+PTY_SYS_TABLE:     ds  MAX_PTY_PAIRS * PTY_STRUCT_SIZE ; Выделяем 32 байта в ОЗУ
+
+; Указатели кольцевых буферов PTY (4 пары * 2 направления * 2 байта = 16 байт)
+PTY_M2S_TAILS:     ds  MAX_PTY_PAIRS * 2
+PTY_S2M_TAILS:     ds  MAX_PTY_PAIRS * 2
+
+; Временные ячейки сисколлов PTY
+PTY_TEMP_FD1:      ds 1
+PTY_TEMP_FD2:      ds 1
+PTY_TEMP_G_IDX1:   ds 1
+PTY_TEMP_G_IDX2:   ds 1
+PTY_TEMP_PAGE:     ds 1
+
+; --- ВРЕМЕННЫЕ ЯЧЕЙКИ ПОДСИС ТЕМЫ PTY ВВОДА-ВЫВОДА ---
+PTY_IO_BUF_PTR:    ds 2             ; Логический адрес буфера Ring 3
+PTY_IO_BYTES_REQ:  ds 2             ; Сколько байт запрошено
+PTY_IO_BYTES_CURR: ds 2             ; Сколько байт обработано
+PTY_IO_STRUCT_PTR: ds 2             ; Указатель на структуру PTY_SYS_TABLE
+PTY_IO_PAIR_IDX:   ds 1             ; Индекс пары (0..3)
+PTY_IO_DIRECTION:  ds 1             ; Направление: 0 = M2S, 1 = S2M
+PTY_IO_TAIL_PTR:   ds 2             ; Вычисленный адрес кольцевой ячейки
+
+; =============================================================================
+; КОНСТАНТЫ СИСКОЛЛА ptsname() ДЛЯ MEGA-580 OS
+; =============================================================================
+PTSNAME_STR_LEN    EQU 13           ; Длина экспортируемой строки "/dev/sock/sX" + NULL
+
+; --- ШАБЛОН ПУТИ СТРОКИ SLAVE УСТРОЙСТВА В ПАМЯТИ ЯДРА ---
+PTSNAME_TEMPLATE:  db  "/dev/sock/s#", 00h ; Шаблон пути, # заменяется на ASCII 0..3
+
+; Временные переменные сисколла
+PTSNAME_USER_PTR:  ds 2             ; Адрес буфера назначения в Ring 3
+PTSNAME_LINE_NUM:  ds 1             ; Номер вычисленной линии (0..3)
+
+; =============================================================================
+; КОНСТАНТЫ СИСКОЛЛА ttyname() ДЛЯ MEGA-580 OS
+; =============================================================================
+TTYNAME_STR_LEN    EQU 9            ; Длина экспортируемой строки "/dev/tty" + NULL
+
+; --- ИМЯ ФИЗИЧЕСКОГО ТЕРМИНАЛА В ПАМЯТИ ЯДРА ---
+TTYNAME_PATH_STR:  db  "/dev/tty", 00h ; Фиксированная строка пути для КР580ВВ51А
+
+; Временные переменные сисколла
+TTYNAME_USER_PTR:  ds 2             ; Логический адрес буфера назначения в Ring 3
