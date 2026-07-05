@@ -1,0 +1,98 @@
+; =============================================================================
+; /include/errno_strings.mem - ТАБЛИЦА СТРОК ОШИБОК POSIX ДЛЯ LIBC
+; =============================================================================
+
+; --- ТАБЛИЦА УКАЗАТЕЛЕЙ НА СТРОКИ ОШИБОК ---
+; Размер: 108 элементов × 2 байта = 216 байт
+; Индекс = код ошибки (0..107)
+; Значение = указатель на ASCIIZ-строку или 0000H (если код не определён)
+; =============================================================================
+ERROR_STRINGS:
+    DW err_unknown        ; 0   - Не используется
+    DW err_eperm          ; 1   - Operation not permitted
+    DW err_enoent         ; 2   - No such file or directory
+    DW err_esrch          ; 3   - No such process
+    DW err_eintr          ; 4   - Interrupted system call
+    DW err_eio            ; 5   - I/O error
+    DW err_unknown        ; 6   - (не определено)
+    DW err_unknown        ; 7   - (не определено)
+    DW err_unknown        ; 8   - (не определено)
+    DW err_ebadf          ; 9   - Bad file number
+    DW err_echild         ; 10  - No child processes
+    DW err_eagain         ; 11  - Try again
+    DW err_enomem         ; 12  - Out of memory
+    DW err_eacces         ; 13  - Permission denied
+    DW err_efault         ; 14  - Bad address
+    DW err_unknown        ; 15  - (не определено)
+    DW err_ebusy          ; 16  - Device or resource busy
+    DW err_eexist         ; 17  - File exists
+    DW err_unknown        ; 18  - (не определено)
+    DW err_enodev         ; 19  - No such device
+    DW err_unknown        ; 20  - (не определено)
+    DW err_unknown        ; 21  - (не определено)
+    DW err_einval         ; 22  - Invalid argument
+    DW err_enfile         ; 23  - File table overflow
+    DW err_emfile         ; 24  - Too many open files
+    DW err_enotty         ; 25  - Not a typewriter
+    DW err_unknown        ; 26  - (не определено)
+    DW err_unknown        ; 27  - (не определено)
+    DW err_unknown        ; 28  - (не определено)
+    DW err_espipe         ; 29  - Invalid seek
+    DW err_erofs          ; 30  - Read-only file system
+    DW err_emlink         ; 31  - Too many links
+    DW err_epipe          ; 32  - Broken pipe
+    DW err_edom           ; 33  - Math argument out of domain
+    DW err_erange         ; 34  - Math result not representable
+    DW err_edeadlk        ; 35  - Resource deadlock avoided
+    DW err_enametoolong   ; 36  - File name too long
+    DW err_enolck         ; 37  - No locks available
+    DW err_enosys         ; 38  - Function not implemented
+    DW err_enotempty      ; 39  - Directory not empty
+    DW err_eloop          ; 40  - Too many levels of symbolic links
+    DW err_unknown        ; 41  - (не определено)
+    DW err_enomsg         ; 42  - No message of desired type
+    DW err_eidrm          ; 43  - Identifier removed
+    DW err_unknown        ; 44..96 - (не определено)
+    ; ... заполняем нулями для кодов 44..96 ...
+    DW err_eafnosupport   ; 97  - Address family not supported
+    DW err_unknown        ; 98..106 - (не определено)
+    DW err_enotconn       ; 107 - Transport endpoint is not connected
+
+; --- СТРОКИ ОШИБОК (ASCIIZ) ---
+; Размещаются в сегменте данных или констант (ROM)
+; =============================================================================
+err_unknown:        DB  "Unknown error", 0
+err_eperm:          DB  "Operation not permitted", 0
+err_enoent:         DB  "No such file or directory", 0
+err_esrch:          DB  "No such process", 0
+err_eintr:          DB  "Interrupted system call", 0
+err_eio:            DB  "I/O error", 0
+err_ebadf:          DB  "Bad file number", 0
+err_echild:         DB  "No child processes", 0
+err_eagain:         DB  "Try again", 0
+err_enomem:         DB  "Out of memory", 0
+err_eacces:         DB  "Permission denied", 0
+err_efault:         DB  "Bad address", 0
+err_ebusy:          DB  "Device or resource busy", 0
+err_eexist:         DB  "File exists", 0
+err_enodev:         DB  "No such device", 0
+err_einval:         DB  "Invalid argument", 0
+err_enfile:         DB  "File table overflow", 0
+err_emfile:         DB  "Too many open files", 0
+err_enotty:         DB  "Not a typewriter", 0
+err_espipe:         DB  "Invalid seek", 0
+err_erofs:          DB  "Read-only file system", 0
+err_emlink:         DB  "Too many links", 0
+err_epipe:          DB  "Broken pipe", 0
+err_edom:           DB  "Math argument out of domain", 0
+err_erange:         DB  "Math result not representable", 0
+err_edeadlk:        DB  "Resource deadlock avoided", 0
+err_enametoolong:   DB  "File name too long", 0
+err_enolck:         DB  "No locks available", 0
+err_enosys:         DB  "Function not implemented", 0
+err_enotempty:      DB  "Directory not empty", 0
+err_eloop:          DB  "Too many levels of symbolic links", 0
+err_enomsg:         DB  "No message of desired type", 0
+err_eidrm:          DB  "Identifier removed", 0
+err_eafnosupport:   DB  "Address family not supported", 0
+err_enotconn:       DB  "Transport endpoint is not connected", 0

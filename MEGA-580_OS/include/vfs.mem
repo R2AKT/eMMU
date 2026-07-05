@@ -1,0 +1,29 @@
+; =============================================================================
+; /include/vfs.mem - РЕЗЕРВИРОВАНИЕ СТАТИЧЕСКОЙ ОЗУ ПОДСИС ТЕМЫ ВИРТУАЛЬНОЙ ФС
+; =============================================================================
+
+VFS_SWITCH_TABLE:    ds  VFS_MAX_TYPES * VFS_ROW_SIZE       ; Выделено 320 байт ОЗУ
+SYS_FILE_TABLE:      ds  MAX_SYS_FILES * SYS_FILE_SLOT_SIZE ; Выделено 1280 байт ОЗУ
+
+; Служебные ячейки атомарной табличной диспетчеризации
+VFS_DISPATCH_MAJOR:  ds  1
+VFS_DISPATCH_MINOR:  ds  1
+VFS_DRV_ROW_PTR:     ds  2
+VFS_CLOSE_TEMP_IDX:  ds  1
+VFS_CLOSE_STRUCT_PTR:ds  2
+VFS_CLOSE_MAJOR_TMP: ds  1
+VFS_CLOSE_MINOR_TMP: ds  1
+
+; --- ГЛОБАЛЬНАЯ ТАБЛИЦА АППАРАТНЫХ ISR (8 ВЕКТОРОВ * 2 БАЙТА = 16 БАЙТ) ---
+SYS_ISR_TABLE:       ds  8 * 2                              ; Хранилище прерываний
+
+; --- ТАБЛИЦА СТАТИЧЕСКОГО МОНТИРОВАНИЯ УЗЛОВ ОБОРУДОВАНИЯ /dev/ ---
+DEV_MOUNT_TABLE:     ds  MAX_MOUNT_DEVS * MNT_ENTRY_SZ      ; Выделено ровно 48 байт ОЗУ
+
+; Внутренний скалярный кэш модулей VFS
+K_TMP_SLOTS_CNT:     ds  1                                  ; Счетчик слотов
+K_TMP_CURR_LO:       ds  1
+K_TMP_CURR_HI:       ds  1
+
+; Временный scratchpad для атомарной маршрутизации k_vfs_dispatch
+K_TMP_PC:            ds  2                                  ; ЖЕСТКИЙ ФИКС: Выделено 2 байта!

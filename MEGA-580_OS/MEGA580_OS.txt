@@ -1,0 +1,13 @@
+[OS_root]
+ ├── kernel.asm               	 ; Центральный файл сборки (Main Stub)
+ ├── [include]
+ │    ├── vfs.inc, vfs.mem       ; Виртуальная ФС (Major/Minor диспетчеры)
+ │    ├── pcb.inc, pcb.mem       ; Диспетчер задач (Таблицы PCB, Сессии, SID)
+ │    ├── net.inc, net.mem       ; Сетевой стек (KSZ8851, ARP, AF_UNIX)
+ │    ├── tty.inc, tty.mem       ; Терминальный движок (UART, PTY, Дисциплина линии)
+ │    └── extfs.inc, extfs.mem   ; Дисковая система (Experimental FS 0xE0, Inodes)
+ └── [kernel]
+      ├── vfs.asm, pcb.asm       ; Исполняемый код VFS и Шедуллера/Сигналов
+      ├── net_ksz8851.asm        ; Драйвер сетевого чипа и ARP-обучение
+      ├── tty_core.asm           ; Обработчики прерываний КР580ВВ51А и сисколлы ioctl
+      └── extfs_core.asm         ; Низкоуровневая ФС CompactFlash и Суперблок

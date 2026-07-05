@@ -1,0 +1,37 @@
+SYSCALL_TABLE:
+	DW		syscall_bad_number
+    ; DW	sys_fork				; Index 0: SYS_FORK
+    ; DW	sys_exit				; Index 1: SYS_EXIT
+    ; DW	sys_waitpid				; Index 2: SYS_WAITPID
+    ; DW	sys_request_io			; Index 3: SYS_REQUEST_IO
+    ; DW	sys_release_io			; Index 4: SYS_RELEASE_IO
+    ; DW	sys_open				; Index 5: SYS_OPEN
+    ; DW	sys_close				; Index 6: SYS_CLOSE
+    ; DW	sys_read				; Index 7: SYS_READ
+    ; DW	sys_write				; Index 8: SYS_WRITE
+    ; DW	sys_chdir				; Index 9: SYS_CHDIR
+    ; DW	sys_alarm				; Index 10: SYS_ALARM
+    ; DW	sys_sigaction			; Index 11: SYS_SIGACTION
+    ; DW	sys_execve				; Index 12: SYS_EXECVE
+	; DW  sys_overlay_map			; Index 13: SYS_OVERLAY_MAP
+	; DW	sys_kill				; Index 14: SYS_KILL
+	; DW	sys_lseek				; Index 15: SYS_LSEEK
+	; DW	sys_pipe				; Index 16: SYS_PIPE
+	; DW	sys_mutex				; Index 17: SYS_MUTEX
+	; DW	sys_cond				; Index 18: SYS_COND
+	; DW	sys_sem_wait			; Index 19: SYS_SEM_WAIT
+	; DW	sys_sem_post			; Index 20: SYS_SEM_POST
+	; DW	sys_socket				; Index 21: SYS_SOCKET
+	; DW	sys_send				; Index 22: SYS_SEND
+	; DW	sys_recv				; Index 23: SYS_RECV
+	; DW	sys_socketpair			; Index 24: SYS_SOCKETPAIR
+	; DW	sys_netstat				; Index 25: SYS_NETSTAT
+	; DW	sys_shutdown			; Index 26: SYS_SHUTDOWN
+	; DW	sys_openpty				; Index 27: SYS_OPENPTY
+	; DW	sys_ptsname				; Index 28: SYS_PTSNAME
+	; DW	sys_ttyname				; Index 29: SYS_TTYNAME
+	; DW	sys_ioctl				; Index 30: SYS_IOCTL
+	; DW	sys_setsid				; Index 31: SYS_SETSID
+	; DW	sys_getpid				; Index 32: SYS_GETPID
+	; DW	sys_getppid				; Index 33: SYS_GETPPID
+	; DW	sys_getuid				; Index 34: SYS_GETUID
