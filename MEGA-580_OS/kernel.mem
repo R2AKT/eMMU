@@ -1,8 +1,10 @@
 #code RAM, *
+#include "./include/kernel_time.mem"
 #include "./include/vfs.mem"
 #include "./include/pcb.mem"
 #include "./include/syscall.mem"
 #include "./include/tty.mem"
+#include "./include/hw_i8251.mem"
 
 ; =============================================================================
 ; Системные структуры данных распределения памяти Ring 0

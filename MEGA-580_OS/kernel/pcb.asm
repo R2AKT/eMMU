@@ -89,7 +89,7 @@ sched_find_candidate:
     MVI  B, MAX_PROCS               ; Счетчик цикла = 32 слота
 
 sched_scan_loop:
-    PUSH H                          ; Спасли физический адрес текущего PCB на итерации
+    PUSH H                          ; Сохранили физический адрес текущего PCB на итерации
     
     ; Проверяем статус существования процесса (O_STATUS == ST_FREE)?
     LXI  D, O_STATUS
@@ -255,21 +255,18 @@ switch_mmu_context:
 k_pcb_subsys_init:
     ; === ШАГ 1: ПОЛНЫЙ СБРОС УПРАВЛЯЮЩИХ ЯЧЕЕК ПЛАНИРОВЩИКА ===
     XRA  A
-    STA  CURRENT_PID             ; Активный процесс = PID 0 (idle)
-    STA  NEXT_PID                ; Следующий на активацию = PID 0
-    STA  SCHED_BEST_PRIO         ; Сброс рекорда приоритета
-    STA  SCHED_BEST_PID          ; Сброс PID кандидата
-    STA  CPU_USAGE               ; Сброс метрики загрузки CPU
+    STA  CURRENT_PID
+    STA  NEXT_PID
+    STA  SCHED_BEST_PRIO
+    STA  SCHED_BEST_PID
+    STA  CPU_USAGE
 
     ; === ШАГ 2: РАЗМЕТКА ТАБЛИЦЫ PCB (32 СЛОТА ПО 64 БАЙТА) ===
-    LXI  H, PCB_TABLE            ; HL = начало таблицы процессов
+    LXI  H, PCB_TABLE
     MVI  C, 0                    ; C = текущий PID (0..31)
 
 _init_pcb_loop:
     ; --- 2.1: Полное зануление 64-байтного слота ---
-    ; Это гарантирует безопасные дефолтные значения для всех полей:
-    ; O_SIG_PENDING = 0, O_SIG_BLOCKED = 0, O_SIG_TABLE_PTR = 0,
-    ; O_CWD_INODE = 0, O_UMASK = 0, O_RESERVED_PAD = 0 и т.д.
     PUSH H                       ; Сохраняем базу текущего слота
     MVI  B, PCB_SIZE             ; B = 64
 _clear_pcb_slot:
@@ -288,23 +285,22 @@ _clear_pcb_slot:
     MVI  M, ST_FREE
 
     ; O_PPID (+6) = RES_FREE_MARKER (родитель отсутствует)
-    POP  H
-    PUSH H
+    ; ИСПРАВЛЕНО: Используем точное смещение вместо POP/PUSH
+    PUSH H                       ; ← ДОБАВЛЕНО: Сохраняем базу
     LXI  D, O_PPID
     DAD  D
     MVI  M, RES_FREE_MARKER
+    POP  H                       ; ← Восстанавливаем базу
 
     ; O_TTY_INDEX (+24) = RES_FREE_MARKER (отвязан от TTY)
-    POP  H
-    PUSH H
+    PUSH H                       ; ← ДОБАВЛЕНО: Сохраняем базу
     LXI  D, O_TTY_INDEX
     DAD  D
     MVI  M, RES_FREE_MARKER
+    POP  H                       ; ← Восстанавливаем базу
 
     ; O_FILE_TABLE (+34..+49) = 16 дескрипторов по RES_FREE_MARKER
-    ; В новой структуре PCB 16 FD (FD 0..15), а не 8!
-    POP  H
-    PUSH H
+    PUSH H                       ; ← ДОБАВЛЕНО: Сохраняем базу
     LXI  D, O_FILE_TABLE
     DAD  D                       ; HL -> O_FILE_TABLE
     MVI  B, 16                   ; 16 файловых дескрипторов
@@ -313,9 +309,9 @@ _init_file_table_loop:
     INX  H
     DCR  B
     JNZ  _init_file_table_loop
+    POP  H                       ; ← Восстанавливаем базу
 
     ; --- 2.3: Переход к следующему слоту таблицы ---
-    POP  H                       ; HL = база текущего PCB
     LXI  D, PCB_SIZE             ; PCB_SIZE = 64
     DAD  D                       ; HL = начало следующего слота
 
@@ -325,8 +321,6 @@ _init_file_table_loop:
     JNZ  _init_pcb_loop          ; Повторяем для всех 32 слотов
 
     ; === ШАГ 3: АВТОРИЗОВАННАЯ КОНФИГУРАЦИЯ PID 0 (IDLE-ЗАДАЧА ЯДРА) ===
-    ; PID 0 — это особая задача: она всегда ST_RUNNING, имеет ROOT-права,
-    ; владеет физическими страницами 0..3 и имеет высший приоритет.
     LXI  H, PCB_TABLE            ; HL = база PID 0
 
     ; O_STATUS (+1) = ST_RUNNING (ядро выполняется на CPU)

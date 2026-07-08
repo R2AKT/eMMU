@@ -1,9 +1,12 @@
+#include "kernel_time.inc"
 #include "hw.inc"
+#include "signals.inc"
 #include "pcb.inc"
 #include "vfs.inc"
 #include "syscall.inc"
 #include "tty.inc"
-
+#include "hw_i8251.inc"
+#include "hw_ns16550.inc"
 
 ; =============================================================================
 ; Константы подсистемы распределения физической памяти ядра
