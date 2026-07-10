@@ -81,3 +81,12 @@ ENOMSG             EQU 42           ; No message of desired type
 EIDRM              EQU 43           ; Identifier removed
 EAFNOSUPPORT       EQU 97           ; Address family not supported
 ENOTCONN           EQU 107          ; Transport endpoint is not connected
+
+VFS_MAX_INODES      EQU 64          ; Максимальное число файлов на RAM-диске
+INODE_STRUCT_SIZE   EQU 16          ; Размер одной структуры Inode (16 байт)
+
+; Канонические типы файлов POSIX VFS ядра
+I_TYPE_FREE         EQU 00H         ; Слот Inode свободен
+I_TYPE_REGULAR      EQU 01H         ; Обычный регулярный файл
+I_TYPE_CHRDEV       EQU 02H         ; Символьное устройство (TTY, LP, NULL)
+I_TYPE_BLKDEV       EQU 03H         ; Блочное устройство (RAM-диск, FDD)

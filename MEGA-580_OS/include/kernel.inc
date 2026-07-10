@@ -7,6 +7,9 @@
 #include "tty.inc"
 #include "hw_i8251.inc"
 #include "hw_ns16550.inc"
+#include "chrdev.inc"
+#include "devices.inc"
+#include "lp.inc"
 
 ; =============================================================================
 ; Константы подсистемы распределения физической памяти ядра

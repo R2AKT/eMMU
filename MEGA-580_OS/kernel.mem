@@ -1,10 +1,13 @@
-#code RAM, *
+#code RAM, 4000h, 4000h
 #include "./include/kernel_time.mem"
 #include "./include/vfs.mem"
 #include "./include/pcb.mem"
 #include "./include/syscall.mem"
 #include "./include/tty.mem"
 #include "./include/hw_i8251.mem"
+#include "./include/hw_ns16550.mem"
+#include "./include/chrdev.mem"
+#include "./include/lp.mem"
 
 ; =============================================================================
 ; Системные структуры данных распределения памяти Ring 0
@@ -16,7 +19,7 @@ RAM_BITMAP:        ds  RAM_BITMAP_SIZE ; Битовая карта заняты�
 GLOBAL_RESOURCE_TABLE:  DS 256
 
 ;=========================================================================================================================
-#code _STACK, *
+#code _STACK, 0C000h, KERNEL_STACK_SIZE
 ; Системный стек Ядра (Изолирован от пользовательских стеков Ring 3)
 KERNEL_STACK_SIZE		EQU 512          ; Выделяем 512 байт под вложенные прерывания
 KERNEL_STACK_TOP		EQU KERNEL_STACK + KERNEL_STACK_SIZE; <-- ВЕРШИНА СТЕКА ЯДРА (Сюда указывает SP супервизора при старте)

@@ -5,6 +5,16 @@
 VFS_SWITCH_TABLE:    ds  VFS_MAX_TYPES * VFS_ROW_SIZE       ; Выделено 320 байт ОЗУ
 SYS_FILE_TABLE:      ds  MAX_SYS_FILES * SYS_FILE_SLOT_SIZE ; Выделено 1280 байт ОЗУ
 
+; =============================================================================
+; ЛОКАЛЬНЫЙ СУПЕРВИЗОРСКИЙ СЕКТОР ХРАНЕНИЯ ПАРАМЕТРОВ (RAM ЯДРА)
+; =============================================================================
+_vfs_mknod_tmp_type:    DB  000H
+_vfs_mknod_tmp_major:   DB  000H
+_vfs_mknod_tmp_minor:   DB  000H
+
+; Глобальная область памяти RAM-диска VFS (Выделено ровно 1024 байта ОЗУ)
+VFS_INODE_TABLE:        DS  VFS_MAX_INODES * INODE_STRUCT_SIZE
+
 ; Служебные ячейки атомарной табличной диспетчеризации
 VFS_DISPATCH_MAJOR:  ds  1
 VFS_DISPATCH_MINOR:  ds  1

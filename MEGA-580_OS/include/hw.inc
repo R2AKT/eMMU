@@ -28,6 +28,7 @@ EMMU_PAGE_REG0		EQU 070H 	; Сегмент 0 Ring 3
 EMMU_PAGE_REG1		EQU	071H	; Сегмент 1 Ring 3
 EMMU_PAGE_REG2		EQU 072H	; Сегмент 2 Ring 3
 EMMU_PAGE_REG3		EQU 073H	; Сегмент 3 Ring 3
+EMMU_ROM_DISABLE	EQU	075H	; Отключение ПЗУ
 EMMU_OVERRIDE		EQU 076H	; Kernel Override
 ; --- БИТЫ УПРАВЛЕНИЯ KERNEL OVERRIDE ---
 KERNEL_OVERRIDE_ON   EQU 0       ; Или другое значение для включения оверрана
