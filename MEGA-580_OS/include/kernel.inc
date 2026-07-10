@@ -3,6 +3,7 @@
 #include "signals.inc"
 #include "pcb.inc"
 #include "vfs.inc"
+#include "chrdev.inc"
 #include "syscall.inc"
 #include "tty.inc"
 #include "hw_i8251.inc"

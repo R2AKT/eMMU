@@ -39,3 +39,8 @@ TTY0_BASE_PORT      EQU 0A0H        ; Базовый порт для TTY0
 TTY1_BASE_PORT      EQU 0B0H        ; Базовый порт для TTY1
 TTY2_BASE_PORT      EQU 0C0H        ; Базовый порт для TTY2
 TTY3_BASE_PORT      EQU 0D0H        ; Базовый порт для TTY3
+
+; --- Аппаратные 8-битные базовые порты ввода-вывода КР580ВМ80А ---
+; (Адреса LPT0=0x378 и LPT1=0x278 на шине eMMU РЕВ_2.0 отражены в 8-битную кучу)
+LPT0_BASE_PORT      EQU 078H        ; Базовый физический порт данных LPT0
+LPT1_BASE_PORT      EQU 028H        ; Базовый физический порт данных LPT1
