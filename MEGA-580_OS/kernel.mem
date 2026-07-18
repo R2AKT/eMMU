@@ -1,4 +1,5 @@
-#code RAM, 4000h, 4000h
+#code RAM, EMMU_PAGE_1, EMMU_PAGE_SIZE
+
 #include "./include/kernel_time.mem"
 #include "./include/vfs.mem"
 #include "./include/chrdev.mem"
@@ -12,17 +13,31 @@
 ; =============================================================================
 ; Системные структуры данных распределения памяти Ring 0
 ; =============================================================================
-RAM_BITMAP:        ds  RAM_BITMAP_SIZE ; Битовая карта занятых/свободных страниц ОЗУ
+RAM_BITMAP:        DS  RAM_BITMAP_SIZE ; Битовая карта занятых/свободных страниц ОЗУ
 
 ; Глобальная таблица занятости портов/устройств (256 байт)
 ; Индекс — номер порта (00H-0FFH). Значение — PID владельца или 0FFH
 GLOBAL_RESOURCE_TABLE:  DS 256
 
 ;=========================================================================================================================
-#code _STACK, 0C000h, KERNEL_STACK_SIZE
+#code _BLANK_RAM, RAM_end+1, EMMU_PAGE_SIZE-RAM_size
+
+;=========================================================================================================================
+#code _BLANK_OVERRUN, EMMU_PAGE_2, EMMU_PAGE_SIZE
+
+;=========================================================================================================================
+#code _BLANK_STACK, EMMU_PAGE_3, EMMU_PAGE_SIZE-KERNEL_STACK_SIZE
+;				DB	0xAA
+;				DB	0x55
+;				DW	KERNEL_STACK_TOP
+;				DW	KERNEL_STACK_SIZE
+;				DW	KERNEL_STACK
+
+;=========================================================================================================================
+#code _STACK, _BLANK_STACK_end, KERNEL_STACK_SIZE
 ; Системный стек Ядра (Изолирован от пользовательских стеков Ring 3)
 KERNEL_STACK_SIZE		EQU 512          ; Выделяем 512 байт под вложенные прерывания
-KERNEL_STACK_TOP		EQU KERNEL_STACK + KERNEL_STACK_SIZE; <-- ВЕРШИНА СТЕКА ЯДРА (Сюда указывает SP супервизора при старте)
+KERNEL_STACK_TOP		EQU _STACK_end-1	 ; _STACK + KERNEL_STACK_SIZE	; <-- ВЕРШИНА СТЕКА ЯДРА (Сюда указывает SP супервизора при старте)
 
 ; --- ИЗОЛИРОВАННАЯ И ЗАЩИЩЕННАЯ ОБЛАСТЬ СТЕКА ЯДРА (GROW DOWNWARD) ---
-KERNEL_STACK: ds  KERNEL_STACK_SIZE ; Выделяем ровно 512 байт в ОЗУ Ring 0
+KERNEL_STACK:	DS  KERNEL_STACK_SIZE ; Выделяем место под стек в ОЗУ Ring 0

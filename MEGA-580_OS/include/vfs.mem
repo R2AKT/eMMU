@@ -28,7 +28,7 @@ VFS_CLOSE_MINOR_TMP: ds  1
 SYS_ISR_TABLE:       ds  8 * 2                              ; Хранилище прерываний
 
 ; --- ТАБЛИЦА СТАТИЧЕСКОГО МОНТИРОВАНИЯ УЗЛОВ ОБОРУДОВАНИЯ /dev/ ---
-DEV_MOUNT_TABLE:     ds  MAX_MOUNT_DEVS * MNT_ENTRY_SZ      ; Выделено ровно 48 байт ОЗУ
+DEV_MOUNT_TABLE:     ds  MAX_MOUNT_DEVS * MNT_ENTRY_SZ      ; Выделено ровно 96 байт ОЗУ
 
 ; Внутренний скалярный кэш модулей VFS
 K_TMP_SLOTS_CNT:     ds  1                                  ; Счетчик слотов

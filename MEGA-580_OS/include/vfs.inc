@@ -8,7 +8,7 @@ VFS_DRV_OPS_COUNT  EQU 5            ; 5 методов: open, close, read, write
 VFS_ROW_SIZE       EQU 10           ; 5 методов * 2 байта = 10 байт на строку драйвера
 MAX_SYS_FILES      EQU 128          ; 128 дескрипторов на систему
 SYS_FILE_SLOT_SIZE EQU 10           ; Каноничный размер строки таблицы файлов = 10 байт
-MAX_MOUNT_DEVS     EQU 8            ; Количество записей в таблице устройств /dev
+MAX_MOUNT_DEVS     EQU 16            ; Количество записей в таблице устройств /dev
 MNT_ENTRY_SZ       EQU 6            ; Сжатый каноничный размер записи монтирования = 6 байт
 
 ; --- СМЕЩЕНИЯ МЕТОДОВ ВНУТРИ СТРОКИ VFS_SWITCH_TABLE (10 БАЙТ) ---

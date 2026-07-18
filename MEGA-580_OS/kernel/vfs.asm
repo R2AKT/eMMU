@@ -51,7 +51,7 @@ _vfs_clear_sys_vars_loop:
     DCR  B                      
     JNZ  _vfs_clear_sys_vars_loop 
 
-    ; --- ЭТАП 4: ЗАНУЛЕНИЕ ТАБЛИЦЫ МОНТИРОВАНИЯ УЗЛОВ (48 БАЙТ) ---
+    ; --- ЭТАП 4: ЗАНУЛЕНИЕ ТАБЛИЦЫ МОНТИРОВАНИЯ УЗЛОВ (96 БАЙТ) ---
     LXI  H, DEV_MOUNT_TABLE
     MVI  B, MAX_MOUNT_DEVS * MNT_ENTRY_SZ 
     XRA  A                      
@@ -538,7 +538,7 @@ k_vfs_resolve_dev:
     OUT  EMMU_OVERRIDE             ; Открыли Сегмент 2 на User RAM [1.3]
     
     LXI  B, DEV_MOUNT_TABLE         ; BC = Начало таблицы монтирования
-    MVI  A, MAX_MOUNT_DEVS          ; A = Лимит сканирования (8 узлов)
+    MVI  A, MAX_MOUNT_DEVS          ; A = Лимит сканирования (16 узлов)
     STA  K_TMP_SLOTS_CNT
 
 _vfs_dev_scan_loop:
