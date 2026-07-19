@@ -11,6 +11,9 @@
 #include "chrdev.inc"
 #include "devices.inc"
 #include "lp.inc"
+#include "hw_rtc.inc"
+#include "rtc_epoch.inc"
+#include "rtc_nvram.inc"
 
 ; =============================================================================
 ; Константы подсистемы распределения физической памяти ядра

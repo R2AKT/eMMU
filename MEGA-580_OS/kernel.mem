@@ -9,6 +9,9 @@
 #include "./include/hw_i8251.mem"
 #include "./include/hw_ns16550.mem"
 #include "./include/lp.mem"
+#include "./include/hw_rtc.mem"
+#include "./include/rtc_epoch.mem"
+#include "./include/rtc_nvram.mem"
 
 ; =============================================================================
 ; Системные структуры данных распределения памяти Ring 0

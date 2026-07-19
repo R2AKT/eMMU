@@ -8,7 +8,7 @@ VFS_DRV_OPS_COUNT  EQU 5            ; 5 методов: open, close, read, write
 VFS_ROW_SIZE       EQU 10           ; 5 методов * 2 байта = 10 байт на строку драйвера
 MAX_SYS_FILES      EQU 128          ; 128 дескрипторов на систему
 SYS_FILE_SLOT_SIZE EQU 10           ; Каноничный размер строки таблицы файлов = 10 байт
-MAX_MOUNT_DEVS     EQU 16           ; Количество записей в таблице устройств /dev
+MAX_MOUNT_DEVS     EQU 16           ; Количество записей в таблице устройств /dev (максимальное количество поддерживаемых слотов для драйверов устройств в системе)
 MNT_ENTRY_SZ       EQU 6            ; Сжатый каноничный размер записи монтирования = 6 байт
 
 ; --- СМЕЩЕНИЯ МЕТОДОВ ВНУТРИ СТРОКИ VFS_SWITCH_TABLE (10 БАЙТ) ---
@@ -19,23 +19,25 @@ V_OP_WRITE         EQU 6            ; +6 [2 B]: Адрес функции write
 V_OP_IOCTL         EQU 8            ; +8 [2 B]: Адрес функции ioctl
 
 ; --- ОФИЦИАЛЬНЫЕ MAJOR-НОМЕРА СИСТЕМНЫХ ДРАЙВЕРОВ ---
-VFS_TYPE_FREE      EQU 000h         ; Слот свободен
-VFS_TYPE_DISK      EQU 001h         ; Experimental FS (CompactFlash)
-VFS_TYPE_PIPE      EQU 002h         ; IPC Конвейеры ОЗУ
-VFS_TYPE_TTY       EQU 003h         ; Физический terminal КР580ВВ51А
-VFS_TYPE_UNIX      EQU 004h         ; Программный сокет AF_UNIX
-VFS_TYPE_INET      EQU 005h         ; Аппаратный Ethernet-сокет (KSZ8851)
-VFS_TYPE_PTY       EQU 006h         ; Виртуальный псевдотерминал PTY
-VFS_TYPE_LPT       EQU 007h         ; Аппаратный параллельный порт LPT
+VFS_TYPE_FREE		EQU 000h        ; Слот свободен
+VFS_TYPE_DISK		EQU 001h        ; Experimental FS (CompactFlash)
+VFS_TYPE_PIPE		EQU 002h        ; IPC Конвейеры ОЗУ
+VFS_TYPE_TTY		EQU 003h        ; Физический terminal КР580ВВ51А
+VFS_TYPE_UNIX		EQU 004h        ; Программный сокет AF_UNIX
+VFS_TYPE_INE		EQU 005h        ; Аппаратный Ethernet-сокет (KSZ8851)
+VFS_TYPE_PTY		EQU 006h        ; Виртуальный псевдотерминал PTY
+VFS_TYPE_LPT		EQU 007h        ; Аппаратный параллельный порт LPT
+VFS_TYPE_RTC		EQU 008h		; Аппаратные часы реального времени (/dev/rtc)
+VFS_TYPE_NVRAM      EQU 009h       	; Энергонезависимая память 50 байт (/dev/nvram)
 
 ; --- СТРУКТУРА ГЛОБАЛЬНОЙ SYS_FILE_TABLE (СТРОГО 10 БАЙТ) ---
-F_TYPE             EQU 0            ; Major Number [1 байт] (00h = Свободный слот)
-F_MINOR            EQU 1            ; Minor Number [1 байт]
-F_REF              EQU 2            ; Счетчик ссылок дескриптора [1 байт]
-F_INODE            EQU 3            ; Номер дискового Inode [2 байта]
-F_OFFSET           EQU 5            ; 32-битная позиция чтения/записи файла [4 байта]
-F_DIRTY            EQU 9            ; Флаг грязного буфера отложенной записи [1 байт]
-RES_FREE_MARKER    EQU 0FFh
+F_TYPE				EQU 0           ; Major Number [1 байт] (00h = Свободный слот)
+F_MINOR            	EQU 1           ; Minor Number [1 байт]
+F_REF              	EQU 2           ; Счетчик ссылок дескриптора [1 байт]
+F_INODE            	EQU 3           ; Номер дискового Inode [2 байта]
+F_OFFSET          	EQU 5           ; 32-битная позиция чтения/записи файла [4 байта]
+F_DIRTY            	EQU 9           ; Флаг грязного буфера отложенной записи [1 байт]
+RES_FREE_MARKER   	EQU 0FFh
 
 ; --- СТРУКТУРА ТАБЛИЦЫ МОНТИРОВАНИЯ DEV_MOUNT_TABLE (СТРОГО 6 БАЙТ) ---
 ; Устранено наложение смещений: структура выровнена линейно без дыр
