@@ -525,7 +525,7 @@ _vfs_lp_mount_loop:
     MVI  C, MAJOR_LP                ; C = MAJOR_LP (7) из за заголовочного lp.inc
     ; Регистр B из сохраненной пары по-прежнему содержит текущий Minor
     
-    CALL vfs_mknod                  ; Физическая интеграция Inode в RAM-диск VFS! [1.3]
+    CALL k_vfs_mknod                  ; Физическая интеграция Inode в RAM-диск VFS! [1.3]
 
     POP  B                          ; Восстановили пару BC со стека ядра
     INR  B                          ; Переходим к следующему Minor-номеру (Minor++)

@@ -12,8 +12,10 @@
 #include "devices.inc"
 #include "lp.inc"
 #include "hw_rtc.inc"
+#include "rtc_core.inc"
 #include "rtc_epoch.inc"
 #include "rtc_nvram.inc"
+#include "panic.inc"
 
 ; =============================================================================
 ; Константы подсистемы распределения физической памяти ядра

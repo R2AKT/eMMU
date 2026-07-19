@@ -368,7 +368,7 @@ rtc_year_extraction_done:
 rtc_month_extract_loop:
     MOV  A, B
     DCR  A                         ; Перевод 1..12 в индекс 0..11
-    ADD  A                         ; Шаг по 2 байта для .dw
+    ADD  A                         ; Шаг по 2 байта для DW
     MOV  E, A
     MVI  D, 0x00
     LXI  H, k_rtc_days_before_month
