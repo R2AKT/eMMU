@@ -26,7 +26,7 @@ boot_start:
     ORG 0028H
 	JMP rst_stub 			; RST 5 — Системная заглушка программного сброса
     ORG 0030H
-    JMP rst_stub;sys_call_entry		; RST 6 — МОНОПОЛЬНАЯ ТОЧКА ВХОДА SYSCALL ENTRY (Trap)
+    JMP sys_call_entry		; RST 6 — МОНОПОЛЬНАЯ ТОЧКА ВХОДА SYSCALL ENTRY (Trap)
     ORG 0038H
 	JMP rst_stub 			; RST 7  — Системная заглушка программного сброса
 
