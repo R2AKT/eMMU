@@ -78,7 +78,7 @@ License addendum - https://github.com/R2AKT/eMMU/blob/main/Addendum.txt
 - **КР580ВМ80А** (i8080-совместимый, 2.5 МГц)
 
 ### Контроллеры прерываний
-- **КР580ВН59** (аналог Intel 8259A) — Master + Slave
+- **КР580ВН59** (аналог Intel 8259A) — Master
 
 ### Системные таймеры
 - **КР580ВИ53** (аналог Intel 8253) — квант 20 мс (50 Гц)
